@@ -1,0 +1,9 @@
+Aplicación móvil integral desarrollada con Flutter para la gestión administrativa y herramientas de apoyo interactivo.
+
+Características principales:
+- Autenticación y Registro: Inicio de sesión con correo y contraseña.
+- Módulo de Clientes: Registro, actualización, listado y gestión en tiempo real.
+- Módulo de Clasificaciones: Categorización organizada de información.
+- Explorador de PokéAPI: Consulta interactiva de datos de Pokémon vía API REST.
+- Directorio Telefónico: Lectura de contactos del dispositivo para envío directo de mensajes mediante WhatsApp.
+- Escáner de Códigos: Lector de códigos de barras y códigos QR con soporte para enlaces institucionales de la Universidad Tecnológica de Tecámac (UTTEC).

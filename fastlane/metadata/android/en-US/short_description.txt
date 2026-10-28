@@ -1,0 +1,1 @@
+Client management, classifications, PokéAPI explorer, contacts, and QR scanner.

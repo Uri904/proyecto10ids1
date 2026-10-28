@@ -1,0 +1,9 @@
+Comprehensive mobile application developed with Flutter for administrative management and interactive utility tools.
+
+Key features:
+- Authentication & User Registration: Secure sign-in with email and password.
+- Clients Module: Real-time client creation, update, listing, and deletion.
+- Classifications Module: Categorized information management.
+- PokéAPI Explorer: Interactive lookup of Pokémon data via REST API.
+- Phone Contacts Directory: Read device contacts for direct WhatsApp message sending.
+- Barcode & QR Scanner: Multi-format barcode and QR code reader with support for institutional URLs.

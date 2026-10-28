@@ -1,0 +1,37 @@
+Categories:
+  - Connectivity
+  - Utilities
+License: MIT
+AuthorName: UTTEC Team
+SourceCode: https://github.com/user/proyecto10ids1
+IssueTracker: https://github.com/user/proyecto10ids1/issues
+
+AutoName: Proyecto UTTEC - Gestión y Herramientas
+Summary: Gestión de clientes, clasificaciones, PokéAPI, directorio y escáner QR.
+Description: |-
+  Aplicación móvil integral desarrollada con Flutter para la gestión
+  administrativa y herramientas de apoyo interactivo.
+
+  Características principales:
+  - Autenticación y Registro con correo y contraseña.
+  - Módulo de Clientes: Registro y administración en tiempo real.
+  - Módulo de Clasificaciones.
+  - Explorador de PokéAPI.
+  - Directorio de contactos para envío de WhatsApp.
+  - Escáner de Códigos de Barras y Códigos QR.
+
+AntiFeatures:
+  - NonFreeNet
+
+Builds:
+  - versionName: '1.0.0'
+    versionCode: 1
+    commit: '1.0.0'
+    subdir: '.'
+    build:
+      - flutter pub get
+      - flutter build apk --release
+
+ArchivePolicy: 3 versions
+AutoUpdateMode: None
+UpdateCheckMode: Tags
