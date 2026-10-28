@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/app_drawer.dart';
 
@@ -13,7 +13,9 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
-  MobileScannerController? _scannerController;
+  final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
+  QRViewController? _qrController;
+
   bool _isScannerActive = false;
   bool _isPermissionDenied = false;
 
@@ -25,7 +27,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   void dispose() {
-    _scannerController?.dispose();
+    _qrController?.dispose();
     super.dispose();
   }
 
@@ -40,7 +42,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
         _scannedType = null;
         _isProcessingCode = false;
       });
-      _initController();
+      _qrController?.resumeCamera();
     } else {
       setState(() {
         _isPermissionDenied = true;
@@ -49,26 +51,42 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
-  void _initController() {
-    _scannerController?.dispose();
-    _scannerController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
-      torchEnabled: false,
-    );
+  void _onQRViewCreated(QRViewController controller) {
+    _qrController = controller;
+    controller.scannedDataStream.listen((scanData) {
+      if (_isProcessingCode || scanData.code == null || scanData.code!.isEmpty) {
+        return;
+      }
+
+      final String rawValue = scanData.code!;
+
+      setState(() {
+        _isProcessingCode = true;
+        _scannedValue = rawValue;
+        _scannedType = _formatBarcodeFormat(scanData.format);
+        _isUrlValue = _checkIsUrl(rawValue);
+        _isUTTECUrl = _checkIsUTTECUrl(rawValue);
+      });
+
+      _stopScanner();
+
+      if (_isUrlValue) {
+        _openUrlInBrowser(rawValue);
+      }
+    });
   }
 
   void _stopScanner() {
-    _scannerController?.stop();
+    _qrController?.pauseCamera();
     setState(() {
       _isScannerActive = false;
     });
   }
 
-  String _formatBarcodeType(BarcodeFormat format) {
+  String _formatBarcodeFormat(BarcodeFormat format) {
     switch (format) {
-      case BarcodeFormat.qrCode:
-        return 'Código QR (QR Code)';
+      case BarcodeFormat.qrcode:
+        return 'Código QR (ZXing QR)';
       case BarcodeFormat.code128:
         return 'Código de Barras (Code 128)';
       case BarcodeFormat.code39:
@@ -84,17 +102,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
       case BarcodeFormat.upcE:
         return 'Código de Barras (UPC-E)';
       case BarcodeFormat.pdf417:
-        return 'Código PDF417 (Credencial/Documento)';
+        return 'Código PDF417 (Documento)';
       case BarcodeFormat.dataMatrix:
         return 'Código Data Matrix';
       case BarcodeFormat.aztec:
         return 'Código Aztec';
       case BarcodeFormat.codabar:
         return 'Código Codabar';
-      case BarcodeFormat.itf:
-        return 'Código ITF';
       default:
-        return 'Código de Barras (${format.name.toUpperCase()})';
+        return 'Código Detectado (ZXing ${format.name.toUpperCase()})';
     }
   }
 
@@ -110,33 +126,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
     return lower.contains('uttec.edu.mx') ||
         lower.contains('uttec.edomex.gob.mx') ||
         lower.contains('uttec');
-  }
-
-  void _onBarcodeDetected(BarcodeCapture capture) {
-    if (_isProcessingCode) return;
-
-    final List<Barcode> barcodes = capture.barcodes;
-    if (barcodes.isEmpty) return;
-
-    final firstCode = barcodes.first;
-    final String rawValue = firstCode.rawValue ?? '';
-
-    if (rawValue.isEmpty) return;
-
-    setState(() {
-      _isProcessingCode = true;
-      _scannedValue = rawValue;
-      _scannedType = _formatBarcodeType(firstCode.format);
-      _isUrlValue = _checkIsUrl(rawValue);
-      _isUTTECUrl = _checkIsUTTECUrl(rawValue);
-    });
-
-    _stopScanner();
-
-    // Si es una URL (por ejemplo del QR de la universidad UTTEC), abrir en navegador
-    if (_isUrlValue) {
-      _openUrlInBrowser(rawValue);
-    }
   }
 
   Future<void> _openUrlInBrowser(String urlString) async {
@@ -190,7 +179,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Escanear QR y Código de Barras'),
+        title: const Text('Escanear QR y Código (ZXing FOSS)'),
         backgroundColor: const Color(0xFF1E3C72),
         foregroundColor: Colors.white,
         actions: [
@@ -198,12 +187,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
             IconButton(
               icon: const Icon(Icons.flash_on_rounded),
               tooltip: 'Linterna',
-              onPressed: () => _scannerController?.toggleTorch(),
+              onPressed: () => _qrController?.toggleFlash(),
             ),
             IconButton(
               icon: const Icon(Icons.cameraswitch_rounded),
               tooltip: 'Cambiar Cámara',
-              onPressed: () => _scannerController?.switchCamera(),
+              onPressed: () => _qrController?.flipCamera(),
             ),
           ],
         ],
@@ -229,7 +218,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Lector de Códigos Barcode / QR',
+                      'Lector de Códigos ZXing (FOSS)',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -238,7 +227,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Escanea códigos de productos, credenciales o el código QR con la URL oficial de la Universidad (UTTEC).',
+                      'Escanea códigos de productos, credenciales o el código QR institucional de la Universidad (UTTEC) mediante motor ZXing de código abierto.',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.85),
                         fontSize: 13,
@@ -327,7 +316,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       );
     }
 
-    if (_isScannerActive && _scannerController != null) {
+    if (_isScannerActive) {
       return Column(
         children: [
           Container(
@@ -344,48 +333,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
               ],
             ),
             clipBehavior: Clip.antiAlias,
-            child: Stack(
-              children: [
-                MobileScanner(
-                  controller: _scannerController!,
-                  onDetect: _onBarcodeDetected,
-                ),
-                // Marco delimitador del visor de escaneo
-                Center(
-                  child: Container(
-                    width: 220,
-                    height: 220,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.amber, width: 2.5),
-                      borderRadius: BorderRadius.circular(16),
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Apunta al código de barras o QR',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            child: QRView(
+              key: _qrKey,
+              onQRViewCreated: _onQRViewCreated,
+              overlay: QrScannerOverlayShape(
+                borderColor: Colors.amber,
+                borderRadius: 16,
+                borderLength: 30,
+                borderWidth: 8,
+                cutOutSize: 220,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -427,7 +384,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Escáner de Cámara',
+              'Escáner ZXing (FOSS)',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -436,7 +393,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Presiona el botón para solicitar permiso de cámara y activar la lectura de códigos.',
+              'Presiona el botón para solicitar permiso de cámara y activar la lectura con el motor libre ZXing.',
               style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
               textAlign: TextAlign.center,
             ),
@@ -550,7 +507,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
             const Divider(height: 24),
 
-            // Contenido/Valor Leído
             const Text(
               'Valor Leído:',
               style: TextStyle(
@@ -581,7 +537,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
             const SizedBox(height: 16),
 
-            // Botones de acción según el resultado
             Row(
               children: [
                 Expanded(
@@ -619,7 +574,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
             const SizedBox(height: 12),
 
-            // Botón para volver a escanear
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

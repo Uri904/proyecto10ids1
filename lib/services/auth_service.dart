@@ -1,63 +1,89 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class AppUser {
+  final String uid;
+  final String email;
+  final String displayName;
+
+  AppUser({
+    required this.uid,
+    required this.email,
+    required this.displayName,
+  });
+}
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
+
+  SupabaseClient get _client => Supabase.instance.client;
 
   /// Obtener el usuario actual
-  User? get currentUser => _auth.currentUser;
+  AppUser? get currentUser {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    final name = (user.userMetadata?['name'] as String?) ??
+        (user.email != null ? user.email!.split('@').first : 'Usuario');
+
+    return AppUser(
+      uid: user.id,
+      email: user.email ?? '',
+      displayName: name,
+    );
+  }
 
   /// Stream para escuchar los cambios de estado de autenticación
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<AppUser?> get authStateChanges {
+    return _client.auth.onAuthStateChange.map((data) {
+      final user = data.session?.user ?? _client.auth.currentUser;
+      if (user == null) return null;
+
+      final name = (user.userMetadata?['name'] as String?) ??
+          (user.email != null ? user.email!.split('@').first : 'Usuario');
+
+      return AppUser(
+        uid: user.id,
+        email: user.email ?? '',
+        displayName: name,
+      );
+    });
+  }
 
   /// Iniciar sesión con Correo y Contraseña
-  Future<UserCredential> signInWithEmailAndPassword({
+  Future<AuthResponse> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      final response = await _client.auth.signInWithPassword(
         email: email.trim(),
         password: password.trim(),
       );
-      return credential;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
+      return response;
+    } on AuthException catch (e) {
+      throw Exception(_handleAuthException(e));
     } catch (e) {
       throw Exception('Ocurrió un error inesperado al iniciar sesión.');
     }
   }
 
   /// Registrar nuevo usuario con Nombre, Correo y Contraseña
-  Future<UserCredential> signUpWithEmailAndPassword({
+  Future<AuthResponse> signUpWithEmailAndPassword({
     required String name,
     required String email,
     required String password,
   }) async {
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
+      final response = await _client.auth.signUp(
         email: email.trim(),
         password: password.trim(),
+        data: {'name': name.trim()},
       );
-
-      final user = credential.user;
-      if (user != null) {
-        // Actualizar el nombre de pantalla en Firebase Auth
-        await user.updateDisplayName(name.trim());
-
-        // Guardar la información adicional en Firestore
-        await _firestore.collection('users').doc(user.uid).set({
-          'uid': user.uid,
-          'name': name.trim(),
-          'email': email.trim(),
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      return credential;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
+      return response;
+    } on AuthException catch (e) {
+      throw Exception(_handleAuthException(e));
     } catch (e) {
       throw Exception('Ocurrió un error inesperado durante el registro.');
     }
@@ -65,30 +91,21 @@ class AuthService {
 
   /// Cerrar sesión
   Future<void> signOut() async {
-    await _auth.signOut();
+    await _client.auth.signOut();
   }
 
-  /// Traducir errores comunes de FirebaseAuth al español
-  String _handleAuthException(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'user-not-found':
-      case 'wrong-password':
-      case 'invalid-credential':
-        return 'Correo o contraseña incorrectos.';
-      case 'email-already-in-use':
-        return 'Ya existe una cuenta vinculada a este correo electrónico.';
-      case 'invalid-email':
-        return 'El formato de correo electrónico no es válido.';
-      case 'weak-password':
-        return 'La contraseña proporcionada es demasiado débil.';
-      case 'user-disabled':
-        return 'Esta cuenta de usuario ha sido deshabilitada.';
-      case 'too-many-requests':
-        return 'Demasiados intentos fallidos. Inténtalo más tarde.';
-      case 'operation-not-allowed':
-        return 'El inicio de sesión con correo y contraseña no está habilitado en Firebase.';
-      default:
-        return e.message ?? 'Error de autenticación: ${e.code}';
+  /// Traducir errores comunes de Supabase Auth al español
+  String _handleAuthException(AuthException e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('invalid login credentials') || msg.contains('invalid credentials')) {
+      return 'Correo o contraseña incorrectos.';
+    } else if (msg.contains('user already registered') || msg.contains('already in use')) {
+      return 'Ya existe una cuenta vinculada a este correo electrónico.';
+    } else if (msg.contains('invalid email')) {
+      return 'El formato de correo electrónico no es válido.';
+    } else if (msg.contains('password should be at least')) {
+      return 'La contraseña proporcionada es demasiado débil.';
     }
+    return e.message;
   }
 }

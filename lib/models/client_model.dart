@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ClientModel {
   final String? id;
   final String name;
@@ -21,35 +19,43 @@ class ClientModel {
     this.createdAt,
   });
 
-  /// Convertir objeto a Map con los nombres de campos de Firestore
+  /// Convertir objeto a Map para la base de datos de Supabase
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'name_client': name.trim(),
       'email_client': email.trim(),
       'phone_client': phone.trim(),
       'address_client': address.trim(),
-      'classificationId': classificationId,
-      'classificationName': classificationName,
-      'createdAt': createdAt != null
-          ? Timestamp.fromDate(createdAt!)
-          : FieldValue.serverTimestamp(),
+      'classification_id': classificationId,
+      'classification_name': classificationName,
     };
+    if (createdAt != null) {
+      map['created_at'] = createdAt!.toIso8601String();
+    }
+    return map;
   }
 
-  /// Crear objeto leyendo desde el DocumentSnapshot de Firestore
-  factory ClientModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final Timestamp? timestamp = data['createdAt'] as Timestamp?;
+  /// Crear objeto desde Map devuelto por Supabase
+  factory ClientModel.fromMap(Map<String, dynamic> data) {
+    DateTime? parsedDate;
+    final rawDate = data['created_at'] ?? data['createdAt'];
+    if (rawDate != null) {
+      if (rawDate is String) {
+        parsedDate = DateTime.tryParse(rawDate);
+      } else if (rawDate is DateTime) {
+        parsedDate = rawDate;
+      }
+    }
 
     return ClientModel(
-      id: doc.id,
+      id: data['id']?.toString(),
       name: data['name_client'] ?? data['name'] ?? '',
       email: data['email_client'] ?? data['email'] ?? '',
       phone: data['phone_client'] ?? data['phone'] ?? '',
       address: data['address_client'] ?? data['address'] ?? '',
-      classificationId: data['classificationId'],
-      classificationName: data['classificationName'],
-      createdAt: timestamp?.toDate(),
+      classificationId: data['classification_id'] ?? data['classificationId'],
+      classificationName: data['classification_name'] ?? data['classificationName'],
+      createdAt: parsedDate,
     );
   }
 }

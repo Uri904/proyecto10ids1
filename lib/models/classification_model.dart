@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ClassificationModel {
   final String? id;
   final String name;
@@ -13,27 +11,35 @@ class ClassificationModel {
     this.createdAt,
   });
 
-  /// Convertir a Map para guardar en Firestore
+  /// Convertir a Map para guardar en Supabase
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'name': name.trim(),
       'description': description.trim(),
-      'createdAt': createdAt != null
-          ? Timestamp.fromDate(createdAt!)
-          : FieldValue.serverTimestamp(),
     };
+    if (createdAt != null) {
+      map['created_at'] = createdAt!.toIso8601String();
+    }
+    return map;
   }
 
-  /// Crear instancia desde un DocumentSnapshot de Firestore
-  factory ClassificationModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final Timestamp? timestamp = data['createdAt'] as Timestamp?;
+  /// Crear instancia desde un Map de Supabase
+  factory ClassificationModel.fromMap(Map<String, dynamic> data) {
+    DateTime? parsedDate;
+    final rawDate = data['created_at'] ?? data['createdAt'];
+    if (rawDate != null) {
+      if (rawDate is String) {
+        parsedDate = DateTime.tryParse(rawDate);
+      } else if (rawDate is DateTime) {
+        parsedDate = rawDate;
+      }
+    }
 
     return ClassificationModel(
-      id: doc.id,
+      id: data['id']?.toString(),
       name: data['name'] ?? '',
       description: data['description'] ?? '',
-      createdAt: timestamp?.toDate(),
+      createdAt: parsedDate,
     );
   }
 }
